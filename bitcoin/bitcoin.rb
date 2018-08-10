@@ -41,14 +41,14 @@ i_2Gy = GCD(2 * Gy, p).first
 # TODO: better understanding of EC point doubling
 slope = (3 * (Gx**2 % p) * i_2Gy)
 # puts slope
-xsum = (slope**2 % p) - 2 * Gx
-# puts xsum
-ysum = slope * (Gx-xsum) - Gy
-# puts ysum
+x = (slope**2 % p) - 2 * Gx
+# puts x
+y = slope * (Gx-x) - Gy
+# puts y
 
-Px = xsum % p
+Px = x % p
 puts "Px: #{Px}"
-Py = ysum % p
+Py = y % p
 puts "Py: #{Py}"
 P = "#{Py > 0 ? '02' : '03'}#{Px.to_s(16)}"
 puts "Public key (P): #{P}"
