@@ -10,6 +10,8 @@ Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
 puts "Base point: #{G}"
 puts "Base point X coordinate: #{Gx.to_i}"
 puts "Base point Y coordinate: #{Gy.to_i}"
+puts
+
 p = 2**256 - 2**32 - 2**9 - 2**8 - 2**7 - 2**6 - 2**4 - 1
 puts "Prime number (dec): #{p}"
 puts "Prime number (hex): #{p.to_s(16)}"
@@ -29,27 +31,47 @@ puts
 #
 # i2Gy = -32617584047406127887053860912668548655625778953140441154984154756096705713545
 
-# TODO: better understanding of multiplicative inverse
-def GCD(a, b)
+# TODO: better understanding of multiplicative inverse, point addition, point doubling
+def gcd(a, b)
   return [0, 1] if a.zero?
-  x1, y1 = GCD(b % a, a)
+  x1, y1 = gcd(b % a, a)
   [y1 - (b / a) * x1, x1]
 end
-i_2Gy = GCD(2 * Gy, p).first
-# puts "i_2Gy: #{i_2Gy}"
+def ec_double(px, py, pn)
+  i_2y = gcd(2 * py, pn).first
+  slope = 3 * (px**2 % pn) * i_2y
+  x = (slope**2 % pn) - 2 * px
+  y = slope * (px - x) - py
+  [x % pn, y % pn]
+end
+def ec_add(px, py, qx, qy, pn)
+  i_qpx = gcd(qx - px, pn).first
+  slope = (qy - py) * i_qpx
+  x = (slope**2 % pn) - px - qx
+  y = slope * (px - x) - py
+  [x % pn, y % pn]
+end
+def ec_multiply(m, px, py, pn)
+  nx, ny = px, py
+  qx, qy = 0, 0
+  0.upto(255).each do |i|
+    if m&1 == 1
+      qx, qy = ec_add qx, qy, nx, ny, pn
+      # puts "qx: #{qx}, qy: #{qy}"
+    end
+    nx, ny = ec_double nx, ny, pn
+    m >>= 1
+  end
+  [qx % pn, qy % pn]
+end
 
-# TODO: better understanding of EC point doubling
-slope = (3 * (Gx**2 % p) * i_2Gy)
-# puts slope
-x = (slope**2 % p) - 2 * Gx
-# puts x
-y = slope * (Gx-x) - Gy
-# puts y
-
-Px = x % p
+Px, Py = ec_double(Gx, Gy, p)
+PMx, PMy = ec_multiply(2, Gx, Gy, p)
+PAx, PAy = ec_add(Gx, Gy, Gx, Gy, p)
 puts "Px: #{Px}"
-Py = y % p
 puts "Py: #{Py}"
+# raise "Not Equal: #{Px} != #{PAx} != #{PMx}" if Px != PAx || PAx != PMx
+
 P = "#{Py > 0 ? '02' : '03'}#{Px.to_s(16)}"
 puts "Public key (P): #{P}"
 

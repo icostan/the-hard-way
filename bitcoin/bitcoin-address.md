@@ -1,9 +1,9 @@
-# Bitcoin
+# Bitcoin address
 
 ## TL;DR;
 
-  * private key is just a number (just like a PIN code) but very large of `10^77` order (think about this in context of number of atoms in the known, observable universe which is `10^80`)
-  * public key is just a scalar multiplication of private key and a point on Elliptic curve
+  * private key is just a number (like a PIN code) but very large (order of magnitude is `10^77` but put this in context of number of atoms in the known, observable universe which is `10^80`)
+  * public key is the result of scalar multiplication of private key and a point on Elliptic curve
   * Bitcoin address is derived from public key by doing some SHA256 hashing and adding network prefix and checksum suffix
 
 ## Elliptic Curve domain parameters defined in secp256k1 paper.
@@ -52,7 +52,7 @@ Private key (dec): 2
 Private key (hex): 2
 ```
 
-That's right, this is a valid private key even if is a very weak one but is enough for the purpose of this article.
+That's right, this is a valid private key even if it is a very weak one but is enough for the purpose of this article.
 
 ## 1. Public key
 
@@ -62,20 +62,14 @@ Now, public key is nothing than a scalar multiplication of private key (k) and e
 
 ``` ruby
 
-sha256=Digest::SHA256.hexdigest([P].pack('H*'))
-```
-
-``` shell
+sha256 = Digest::SHA256.hexdigest([P].pack('H*'))
 SHA256: b1c9938f01121e159887ac2c8d393a22e4476ff8212de13fe1939de2a236f0a7
 ```
 
 ## 3. RIPEMD160 hashing
 
 ``` ruby
-ripemd160=Digest::RMD160.hexdigest([sha256].pack('H*'))
-```
-
-``` shell
+ripemd160 = Digest::RMD160.hexdigest([sha256].pack('H*'))
 RIPEMD160: 06afd46bcdfd22ef94ac122aa11f241244a37ecc
 ```
 
@@ -88,10 +82,7 @@ Version byte and resulting Base58 prefix:
   * 0x80 - Private key WIF - 5, K or L
 
 ``` ruby
-with_version="00#{ripemd160}"
-```
-
-``` shell
+with_version = "00#{ripemd160}"
 WITH VERSION: 0006afd46bcdfd22ef94ac122aa11f241244a37ecc
 ```
 
@@ -100,30 +91,21 @@ WITH VERSION: 0006afd46bcdfd22ef94ac122aa11f241244a37ecc
 Double SHA256 of previously calculated RIPEMD160 prefixed with version byte:
 
 ``` ruby
-checksum=Digest::SHA256.hexdigest([Digest::SHA256.hexdigest([with_version].pack('H*'))].pack('H*'))[0, 8]
-```
-
-``` shell
+checksum = Digest::SHA256.hexdigest([Digest::SHA256.hexdigest([with_version].pack('H*'))].pack('H*'))[0, 8]
 CHECKSUM: 88462f2a
 ```
 
 ## 8. Wrap encoding
 
 ``` ruby
-wrap_encode="#{with_version}#{checksum}"
-```
-
-``` shell
+wrap_encode = "#{with_version}#{checksum}"
 WRAP ENCODE: 0006afd46bcdfd22ef94ac122aa11f241244a37ecc88462f2a
 ```
 
 ## 9. Bitcoin address
 
 ``` ruby
-A=Base58.binary_to_base58([wrap_encode].pack('H*'), :bitcoin)
-```
-
-``` shell
+A = Base58.binary_to_base58([wrap_encode].pack('H*'), :bitcoin)
 Bitcoin Address: 1cMh228HTCiwS8ZsaakH8A8wze1JR5ZsP
 ```
 
