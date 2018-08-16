@@ -20,8 +20,9 @@ puts
 #
 # 0. Private key
 #
-k = 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010
-puts "Private key (bin): #{'0' * 254 + '10'}"
+k = 0x18e14a7b6a307f426a94f8114701e7c8e774e7f9a47e2c2035db29a206321725
+# k = 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010
+puts "Private key (bin): #{k.to_s(2)}"
 puts "Private key (dec): #{k}"
 puts "Private key (hex): #{k.to_s(16)}"
 puts
@@ -29,48 +30,60 @@ puts
 #
 # 1. Public key
 #
-# i2Gy = -32617584047406127887053860912668548655625778953140441154984154756096705713545
-
 # TODO: better understanding of multiplicative inverse, point addition, point doubling
-def gcd(a, b)
-  return [0, 1] if a.zero?
-  x1, y1 = gcd(b % a, a)
-  [y1 - (b / a) * x1, x1]
+def extended_euclidean_algorithm(a, b)
+  s, old_s = 0, 1
+  t, old_t = 1, 0
+  r, old_r = b, a
+  while r != 0
+    quotient = old_r / r
+    old_r, r = r, old_r - quotient * r
+    old_s, s = s, old_s - quotient * s
+    old_t, t = t, old_t - quotient * t
+  end
+  [old_r, old_s, old_t]
+end
+def inverse(n, p)
+  gcd, x, y = extended_euclidean_algorithm(n, p)
+  (n * x + p * y) % p == gcd || raise('invalid gcd')
+  gcd == 1 || raise('no multiplicative inverse')
+  x % p
 end
 def ec_double(px, py, pn)
-  i_2y = gcd(2 * py, pn).first
-  slope = 3 * (px**2 % pn) * i_2y
-  x = (slope**2 % pn) - 2 * px
-  y = slope * (px - x) - py
-  [x % pn, y % pn]
+  i_2y = inverse(2 * py, pn)
+  slope = (3 * px**2 * i_2y) % pn
+  x = (slope**2 - 2 * px) % pn
+  y = (slope*(px - x) - py) % pn
+  [x, y]
 end
-def ec_add(px, py, qx, qy, pn)
-  i_qpx = gcd(qx - px, pn).first
-  slope = (qy - py) * i_qpx
-  x = (slope**2 % pn) - px - qx
-  y = slope * (px - x) - py
-  [x % pn, y % pn]
+def ec_add(ax, ay, bx, by, pn)
+  return [ax, ay] if bx == 0 && by == 0
+  return [bx, by] if ax == 0 && ay == 0
+  return ec_double(ax, ay, pn) if ax == bx && ay == by
+
+  i_bax = inverse(ax - bx, pn)
+  slope = ((ay - by) * i_bax) % pn
+  x = (slope**2 - ax - bx) % pn
+  y = (slope*(ax - x) - ay) % pn
+  [x, y]
 end
 def ec_multiply(m, px, py, pn)
   nx, ny = px, py
   qx, qy = 0, 0
-  0.upto(255).each do |i|
-    if m&1 == 1
-      qx, qy = ec_add qx, qy, nx, ny, pn
-      # puts "qx: #{qx}, qy: #{qy}"
-    end
+  while m > 0
+    qx, qy = ec_add qx, qy, nx, ny, pn if m&1 == 1
     nx, ny = ec_double nx, ny, pn
     m >>= 1
   end
-  [qx % pn, qy % pn]
+  [qx, qy]
 end
 
-Px, Py = ec_double(Gx, Gy, p)
-PMx, PMy = ec_multiply(2, Gx, Gy, p)
-PAx, PAy = ec_add(Gx, Gy, Gx, Gy, p)
-puts "Px: #{Px}"
-puts "Py: #{Py}"
-# raise "Not Equal: #{Px} != #{PAx} != #{PMx}" if Px != PAx || PAx != PMx
+# PDx, PDy = ec_double(Gx, Gy, p)
+# PAx, PAy = ec_add(Gx, Gy, Px, Py, p)
+Px, Py = ec_multiply(k, Gx, Gy, p)
+puts "Px: #{Px.to_s(16)}"
+puts "Py: #{Py.to_s(16)}"
+# raise "Not Equal: #{ PAx.to_s(16) } != #{ PMx.to_s(16) }" if PAx != PMx
 
 P = "#{Py > 0 ? '02' : '03'}#{Px.to_s(16)}"
 puts "Public key (P): #{P}"
@@ -93,9 +106,10 @@ puts "RIPEMD160: #{ripemd160}"
 puts
 
 #
-# 4.5.6.7.8 Wrap version byte and checksum
+# 4.5.6.7.8. Wrap version byte and checksum
 #
-with_version="00#{ripemd160}"
+network='00'
+with_version="#{network}#{ripemd160}"
 # puts "WITH VERSION: #{with_version}"
 checksum=Digest::SHA256.hexdigest([Digest::SHA256.hexdigest([with_version].pack('H*'))].pack('H*'))[0, 8]
 # puts "CHECKSUM: #{checksum}"
