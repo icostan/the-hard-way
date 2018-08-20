@@ -1,6 +1,6 @@
 # The hard way series - Bitcoin: private key, public key, address
 
-## The hard way
+## A. The hard way
 
 ### TL;DR;
 
@@ -10,7 +10,7 @@
 
 ### Elliptic Curve domain parameters defined in secp256k1 paper.
 
-Domain parameters defined in secp256k1 paper are: p,a,b,G,n,h
+Domain parameters defined in [secp256k1](https://en.bitcoin.it/wiki/Secp256k1) paper are: p,a,b,G,n,h
 
 #### Prime number - p
 
@@ -18,12 +18,12 @@ Domain parameters defined in secp256k1 paper are: p,a,b,G,n,h
 ruby> p = 2**256 - 2**32 - 2**9 - 2**8 - 2**7 - 2**6 - 2**4 - 1
  => 115792089237316195423570985008687907853269984665640564039457584007908834671663
 ruby> p.to_s 16
- => 115792089237316195423570985008687907853269984665640564039457584007908834671663
+ => "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
 ```
 
 #### Elliptic Curve (EC) - a, b
 
-In general Elliptic Curves are defined as `y^2 = x^3 + ax + b` equation but since `a = 0` and `b = 7` it becomes `y^2 = x^3 + 7` which is the EC used in Bitcoin.
+In general Elliptic Curves are defined as `y^2 = x^3 + ax + b` equation but since `a = 0` and `b = 7` it becomes `y^2 = x^3 + 7` which is the elliptic curve used in Bitcoin.
 
 #### Generator Point, order and cofactor - G, n and h
 
@@ -172,23 +172,43 @@ ruby> wrap_encode = "#{with_version}#{checksum}"
 ### 9. Bitcoin address
 
 ``` ruby
-ruby> A = Base58.binary_to_base58([wrap_encode].pack('H*'), :bitcoin)
+ruby> base58([wrap_encode].pack('H*'))
  => "1PMycacnJaSqwwJqjawXBErnLsZ7RkXUAs"
 ```
 
-## The easy way
+The algorithm for [Base58](https://en.bitcoin.it/wiki/Base58Check_encoding), basically it removes confusing characters (e.g. "oOiI") and makes entire address selectable on double click.
 
-All the steps above can be done 'the easy way' using the libbitcoin-explorer tool:
+```
+def base58(binary_hash)
+  alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+  value = binary_hash.unpack('H*')[0].to_i 16
+  output = ''
+  while value > 0
+    remainder = value % 58
+    value /= 58
+    output += alphabet[remainder]
+  end
+  output += alphabet[0] * binary_hash.bytes.find_index{|b| b != 0}
+  output.reverse
+end
+```
+
+## B. The easy way
+
+All the steps above can be done 'the easy way', as one-liner, using excellent [Libbitcoin Explorer](https://github.com/libbitcoin/libbitcoin-explorer/wiki/Command-Equivalence) tool:
 
 ```shell
 shell> echo 18e14a7b6a307f426a94f8114701e7c8e774e7f9a47e2c2035db29a206321725 | bx ec-to-public | bx sha256 | bx ripemd160 | bx wrap-encode | bx base58-encode
 1PMycacnJaSqwwJqjawXBErnLsZ7RkXUAs
 ```
 
-Here you go, the exact same bitcoin address generated the hard way and the easy way.
+## C. Conclusions
+
+And here we are, the exact same Bitcoin address `1PMycacnJaSqwwJqjawXBErnLsZ7RkXUAs` generated the hard way and the easy way. You can [check the address](https://www.blockchain.com/btc/address/1PMycacnJaSqwwJqjawXBErnLsZ7RkXUAs).
 
 # References
 
-  *[Bitcoin address generation](https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses)
-  *[secp256k1](https://en.bitcoin.it/wiki/Secp256k1)
-  *[Elliptic curve point multiplication](https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication)
+  * [Bitcoin address generation](https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses)
+  *
+  * [Elliptic curve point multiplication](https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication)
+  *

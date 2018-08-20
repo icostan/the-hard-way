@@ -126,6 +126,19 @@ puts
 #
 # 9. Bitcoin address
 #
-A=Base58.binary_to_base58([wrap_encode].pack('H*'), :bitcoin)
+def base58(binary_hash)
+  alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+  value = binary_hash.unpack('H*')[0].to_i 16
+  output = ''
+  while value > 0
+    remainder = value % 58
+    value /= 58
+    output += alphabet[remainder]
+  end
+  output += alphabet[0] * binary_hash.bytes.find_index{|b| b != 0}
+  output.reverse
+end
+
+A = base58([wrap_encode].pack('H*'))
 puts "Bitcoin Address: #{A}"
 puts
