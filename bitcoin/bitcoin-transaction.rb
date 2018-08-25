@@ -1,37 +1,81 @@
 #!/usr/bin/env ruby
 
+require 'digest'
+
 class Struct
+  OPCODES = {
+    'OP_DUP' =>  0x76,
+    'OP_HASH160' =>  0xA9,
+    'OP_EQUAL' =>  0x87,
+    'OP_EQUALVERIFY' =>  0x88,
+    'OP_CHECKSIG' =>  0xAC
+  }.freeze
+  def opcode(token)
+    raise "opcode #{token} not found" unless OPCODES.include?(token)
+    OPCODES[token].to_s 16
+  end
+  def data(token)
+    bin_size = hex_size token
+    byte_to_hex(bin_size) + token
+  end
+
+  def hex_size(hex)
+    [hex].pack('H*').size
+  end
+  def to_hex(binary_bytes)
+    binary_bytes.unpack('H*').first
+  end
   def hash_to_hex(value)
-    [value].pack('H*').reverse.unpack('H*').first
+    to_hex [value].pack('H*').reverse
   end
   def int_to_hex(value)
-    [value].pack('V').unpack('H*').first
+    to_hex [value].pack('V')
   end
   def byte_to_hex(value)
-    [value].pack('C').unpack('H*').first
+    to_hex [value].pack('C')
+  end
+  def long_to_hex(value)
+    to_hex [value].pack('Q<')
+  end
+  def script_to_hex(script_string)
+    script_string.split.map { |token| token.start_with?('OP') ? opcode(token) : data(token) }.join
   end
 end
 
-Input = Struct.new :hash, :index, :unlock_script_size, :unlock_script, :sequence do
-  def to_hash
-    hash_to_hex(hash) + int_to_hex(index) + byte_to_hex(unlock_script_size) + unlock_script + int_to_hex(sequence)
+# transaction input
+Input = Struct.new :tx_hash, :index, :unlock_script, :sequence do
+  def serialize
+    script_hex = script_to_hex(unlock_script)
+    hash_to_hex(tx_hash) + int_to_hex(index) + byte_to_hex(hex_size(script_hex)) + script_hex + int_to_hex(sequence)
   end
 end
-input = Input.new '7957a35fe64f80d234d76d83a2a8f1a0d8149a41d81de548f0a65a8a999f6f18', 0, 139, 'dup hash160 [d7d35ff2ed9cbc95e689338af8cd1db133be6a4a] equalverify checksig', 4294967295
-puts input.to_hash
+# transaction output
+Output = Struct.new :amount, :lock_script do
+  def serialize
+    script_hex = script_to_hex(lock_script)
+    long_to_hex(amount) + byte_to_hex(hex_size(script_hex)) + script_hex
+  end
+end
+# transaction
+Transaction = Struct.new :version, :inputs, :outputs, :locktime do
+  def serialize
+    inputs_hex = inputs.map(&:serialize).join
+    outputs_hex = outputs.map(&:serialize).join
+    int_to_hex(version) + byte_to_hex(inputs.size) + inputs_hex + byte_to_hex(outputs.size) + outputs_hex + int_to_hex(locktime)
+  end
+  def hash
+    sha256 = Digest::SHA256.hexdigest([serialize].pack('H*'))
+    hash_to_hex Digest::SHA256.hexdigest([sha256].pack('H*'))
+  end
+end
 
-Output = Struct.new :amount, :lock_script_size, :lock_script do
-  def to_hash
-    amount.to_s(16) + lock_script_size.to_s(16) + lock_script
-  end
-end
-output = Output.new 1500000, 25, 'OP_DUP OP_HASH160 ab68025513c3dbd2f7b92a94e0581f5d50f654e7 OP_EQUALVERIFY OP_CHECKSIG'
-puts output.to_hash
+input = Input.new 'd30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93', 1, '', 0xffffffff
+puts "IN: #{input.serialize}"
 
-Transaction = Struct.new :version, :inputs, :outsputs do
-  def to_hash
-    int_to_hex(version)
-  end
-end
-transaction = Transaction.new 1, [], []
-puts transaction.to_hash
+output = Output.new 64000000, 'OP_HASH160 f81498040e79014455a5e8f7bd39bce5428121d3 OP_EQUAL'
+puts "OUT: #{output.serialize}"
+
+puts
+transaction = Transaction.new 1, [input], [output], 0
+puts "TX bin: #{transaction.serialize}"
+puts "TX hash: #{transaction.hash}"
