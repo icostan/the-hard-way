@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'digest'
+require_relative 'bitcoin'
 
 class Struct
   OPCODES = {
@@ -64,12 +65,27 @@ Transaction = Struct.new :version, :inputs, :outputs, :locktime do
     int_to_hex(version) + byte_to_hex(inputs.size) + inputs_hex + byte_to_hex(outputs.size) + outputs_hex + int_to_hex(locktime)
   end
   def hash
-    sha256 = Digest::SHA256.hexdigest([serialize].pack('H*'))
+    bitcoin_hash serialize
+  end
+  def signature_hash
+    bitcoin_hash (serialize + int_to_hex(1))
+  end
+  def signature(k)
+    sign k, hash, 'all'
+  end
+  def bitcoin_hash(hex)
+    sha256 = Digest::SHA256.hexdigest([hex].pack('H*'))
     hash_to_hex Digest::SHA256.hexdigest([sha256].pack('H*'))
   end
 end
 
-input = Input.new 'd30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93', 1, '', 0xffffffff
+#
+#
+#
+k = 0x79020296790075fc8e36835e045c513df8b20d3b3b9dbff4d043be84ae488f8d
+puts "PK: #{k}"
+
+input = Input.new 'd30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93', 1, '', 0xfffffffff
 puts "IN: #{input.serialize}"
 
 output = Output.new 64000000, 'OP_HASH160 f81498040e79014455a5e8f7bd39bce5428121d3 OP_EQUAL'
@@ -79,3 +95,4 @@ puts
 transaction = Transaction.new 1, [input], [output], 0
 puts "TX bin: #{transaction.serialize}"
 puts "TX hash: #{transaction.hash}"
+# puts "TX sign: #{transaction.signature k}"
