@@ -66,18 +66,105 @@ def base58(binary_hash)
   output.reverse
 end
 
-def sign(k, signature_hash, sig_hash)
+def sign(k, signature_hash, sighash)
   r = SecureRandom.hex(32).to_i 16
   r < EC_n || raise('random ephemeral private key is too big')
   rx, ry = ec_multiply(r, EC_Gx, EC_Gy, EC_p)
   rx > 0 || raise('rx is zero, try again')
   i_r = inverse r, EC_p
-  m = transaction_hash.to_i 16
+  m = signature_hash.to_i 16
   s = i_r * (m + k * rx) % EC_p
   s > 0 || raise('s is zero, try again')
-  encode_der rx, s
+  encode_der rx, s, sighash
 end
 
-def encode_der(r, s)
-  "3045022100#{r.to_s(16)}0220#{s.to_s(16)}01"
+def encode_der(r, s, sighash_type)
+  r_hex = r.to_s(16).rjust 66, '0'
+  s_hex = s.to_s(16).rjust 64, '0'
+  sighash_type_hex = sighash_type.to_s(16).rjust 2, '0'
+  "30450221#{r_hex}0220#{s_hex}#{sighash_type_hex}"
+end
+
+# Utils
+class Struct
+  OPCODES = {
+    'OP_DUP' =>  0x76,
+    'OP_HASH160' =>  0xA9,
+    'OP_EQUAL' =>  0x87,
+    'OP_EQUALVERIFY' =>  0x88,
+    'OP_CHECKSIG' =>  0xAC
+  }.freeze
+  def opcode(token)
+    raise "opcode #{token} not found" unless OPCODES.include?(token)
+    OPCODES[token].to_s 16
+  end
+  def data(token)
+    bin_size = hex_size token
+    # TODO: data size is defined as 1-9 bytes
+    byte_to_hex(bin_size) + token
+  end
+
+  def hex_size(hex)
+    [hex].pack('H*').size
+  end
+  def to_hex(binary_bytes)
+    binary_bytes.unpack('H*').first
+  end
+  def hash_to_hex(value)
+    to_hex [value].pack('H*').reverse
+  end
+  def int_to_hex(value)
+    to_hex [value].pack('V')
+  end
+  def byte_to_hex(value)
+    to_hex [value].pack('C')
+  end
+  def long_to_hex(value)
+    to_hex [value].pack('Q<')
+  end
+  def script_to_hex(script_string)
+    script_string.split.map { |token| token.start_with?('OP') ? opcode(token) : data(token) }.join
+  end
+  def sha256(hex)
+    Digest::SHA256.hexdigest([hex].pack('H*'))
+  end
+end
+
+# transaction input
+Input = Struct.new :tx_hash, :index, :unlock_script, :sequence do
+  def serialize
+    script_hex = script_to_hex(unlock_script)
+    hash_to_hex(tx_hash) + int_to_hex(index) + byte_to_hex(hex_size(script_hex)) + script_hex + int_to_hex(sequence)
+  end
+end
+
+# transaction output
+Output = Struct.new :amount, :lock_script do
+  def serialize
+    script_hex = script_to_hex(lock_script)
+    long_to_hex(amount) + byte_to_hex(hex_size(script_hex)) + script_hex
+  end
+end
+
+# transaction
+Transaction = Struct.new :version, :inputs, :outputs, :locktime do
+  def serialize
+    inputs_hex = inputs.map(&:serialize).join
+    outputs_hex = outputs.map(&:serialize).join
+    int_to_hex(version) + byte_to_hex(inputs.size) + inputs_hex + byte_to_hex(outputs.size) + outputs_hex + int_to_hex(locktime)
+  end
+
+  def hash
+    hash_to_hex sha256(sha256(serialize))
+  end
+
+  def signature_hash(sighash = 1)
+    sha256(sha256(serialize + int_to_hex(sighash)))
+  end
+
+  def endorsement(k, lock_script, sighash = 1)
+    inputs.first.unlock_script = lock_script
+    hash = signature_hash sighash
+    sign k, hash, sighash
+  end
 end
