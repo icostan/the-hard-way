@@ -66,24 +66,45 @@ def base58(binary_hash)
   output.reverse
 end
 
-def sign(k, signature_hash, sighash)
-  r = SecureRandom.hex(32).to_i 16
-  r < EC_n || raise('random ephemeral private key is too big')
-  rx, ry = ec_multiply(r, EC_Gx, EC_Gy, EC_p)
-  rx > 0 || raise('rx is zero, try again')
-  i_r = inverse r, EC_p
-  m = signature_hash.to_i 16
-  s = i_r * (m + k * rx) % EC_p
-  s > 0 || raise('s is zero, try again')
-  encode_der rx, s, sighash
-end
-
 def encode_der(r, s, sighash_type)
   r_hex = r.to_s(16).rjust 66, '0'
   s_hex = s.to_s(16).rjust 64, '0'
   sighash_type_hex = sighash_type.to_s(16).rjust 2, '0'
   "30450221#{r_hex}0220#{s_hex}#{sighash_type_hex}"
 end
+
+#
+# ECDSA
+#
+def sign(private_key, digest, temp_key = nil)
+  temp_key ||= 1 + SecureRandom.random_number(EC_n - 1)
+  rx, _ry = ec_multiply(temp_key, EC_Gx, EC_Gy, EC_p)
+  r = rx % EC_n
+  r > 0 || raise('r is zero, try again new temp key')
+  i_tk = inverse temp_key, EC_n
+  m = digest_to_integer digest
+  # puts "M: #{m}"
+  s = (i_tk * (m + r * private_key)) % EC_n
+  s > 0 || raise('s is zero, try again new temp key')
+  [r, s]
+end
+
+def verify?(px, py, digest, signature)
+  r, s = signature
+  i_s = inverse s, EC_n
+  m = digest_to_integer digest
+  u1 = i_s * m % EC_n
+  u2 = i_s * r % EC_n
+  u1Gx, u1Gy = ec_multiply u1, EC_Gx, EC_Gy, EC_p
+  u2Px, u2Py = ec_multiply u2, px, py, EC_p
+  rx, _ry = ec_add u1Gx, u1Gy, u2Px, u2Py, EC_p
+  r == rx
+end
+
+def digest_to_integer(digest)
+  digest.bytes.reduce { |n, b| (n << 8) + b }
+end
+
 
 # Utils
 class Struct
