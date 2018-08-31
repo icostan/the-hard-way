@@ -28,6 +28,7 @@ RSpec.describe 'bitcoin' do
       output = Output.new 64000000, 'OP_HASH160 f81498040e79014455a5e8f7bd39bce5428121d3 OP_EQUAL'
       t = Transaction.new 1, [input], [output], 0
       endorsement = t.endorsement k, lock_script
+      expect(endorsement).to eq '3045022100b290086350a59ce28dd80cc89eac80eac097c20a50ed8c4f35b1ecbed789b65c02200129f4c34a9b05705d4f5e55acff0ce44b5565ab4a8c7faa4a74cf5e1367451101'
     end
   end
 
@@ -38,27 +39,45 @@ RSpec.describe 'bitcoin' do
       @px, @py = ec_multiply @private_key, EC_Gx, EC_Gy, EC_p
       @temp_key = 8170412689086572914872624726984617755309377628698418075870043184004257040259
       @digest = Digest::SHA256.hexdigest(message)
-      # puts "Message digest: #{@digest}"
     end
 
     it 'with ECDSA gem' do
-      # puts '==> ECDSA'
       require 'ecdsa'
       group = ECDSA::Group::Secp256k1
       public_key = ECDSA::Point.new group, @px, @py
 
-      signature1 = ECDSA.sign(group, @private_key, @digest, @temp_key)
-      # puts signature1.inspect
-      valid1 = ECDSA.valid_signature?(public_key, @digest, signature1)
-      expect(valid1).to be_truthy
+      signature = ECDSA.sign(group, @private_key, @digest, @temp_key)
+      valid = ECDSA.valid_signature?(public_key, @digest, signature)
+      expect(valid).to be_truthy
     end
 
-    it 'with cryptocrafts' do
-      # puts '==> CryptoCrafts'
-      r, s = sign(@private_key, @digest, @temp_key)
-      # puts [r, s].inspect
-      valid2 = verify?(@px, @py, @digest, [r, s])
-      expect(valid2).to be_truthy
+    describe 'with cryptocrafts' do
+      it 'same temp key' do
+        r, s = sign(@private_key, @digest, @temp_key)
+        valid = verify?(@px, @py, @digest, [r, s])
+        expect(valid).to be_truthy
+      end
+      it 'new temp key' do
+        r, s = sign(@private_key, @digest)
+        valid = verify?(@px, @py, @digest, [r, s])
+        expect(valid).to be_truthy
+      end
+    end
+  end
+
+  describe 'utils' do
+    before do
+      @x = 0x09A4D6792295A7F730FC3F2B49CBC0F62E862272F
+      @x_bytes = "\x9AMg\x92)Z\x7Fs\x0F\xC3\xF2\xB4\x9C\xBC\x0Fb\xE8b'/"
+      @x_hex = '9a4d6792295a7f730fc3f2b49cbc0f62e862272f'
+    end
+    it '#bytes2int' do
+      expect(bytes2int(@x_bytes)).to eq @x
+    end
+    it '#int2bytes' do
+      x_bytes = int2bytes @x
+      expect(int2bytes(@x)).to eq x_bytes
+      # expect(int2bytes(@x)).to eq @x_bytes
     end
   end
 end

@@ -66,7 +66,8 @@ def base58(binary_hash)
   output.reverse
 end
 
-def encode_der(r, s, sighash_type)
+def encode_der(signature, sighash_type)
+  r, s = signature
   r_hex = r.to_s(16).rjust 66, '0'
   s_hex = s.to_s(16).rjust 64, '0'
   sighash_type_hex = sighash_type.to_s(16).rjust 2, '0'
@@ -82,7 +83,7 @@ def sign(private_key, digest, temp_key = nil)
   r = rx % EC_n
   r > 0 || raise('r is zero, try again new temp key')
   i_tk = inverse temp_key, EC_n
-  m = digest_to_integer digest
+  m = bytes2int digest
   # puts "M: #{m}"
   s = (i_tk * (m + r * private_key)) % EC_n
   s > 0 || raise('s is zero, try again new temp key')
@@ -92,7 +93,7 @@ end
 def verify?(px, py, digest, signature)
   r, s = signature
   i_s = inverse s, EC_n
-  m = digest_to_integer digest
+  m = bytes2int digest
   u1 = i_s * m % EC_n
   u2 = i_s * r % EC_n
   u1Gx, u1Gy = ec_multiply u1, EC_Gx, EC_Gy, EC_p
@@ -101,12 +102,18 @@ def verify?(px, py, digest, signature)
   r == rx
 end
 
-def digest_to_integer(digest)
-  digest.bytes.reduce { |n, b| (n << 8) + b }
+def bytes2int(bytes_string)
+  bytes_string.bytes.reduce { |n, b| (n << 8) + b }
+end
+def int2bytes(n)
+  a = []
+  while n > 0
+    a << (n & 0xFF)
+    n >>= 8
+  end
+  a.reverse.pack('C*')
 end
 
-
-# Utils
 class Struct
   OPCODES = {
     'OP_DUP' =>  0x76,
@@ -179,13 +186,14 @@ Transaction = Struct.new :version, :inputs, :outputs, :locktime do
     hash_to_hex sha256(sha256(serialize))
   end
 
-  def signature_hash(sighash = 1)
-    sha256(sha256(serialize + int_to_hex(sighash)))
+  def signature_hash(sighash_type = 0x1)
+    sha256(sha256(serialize + int_to_hex(sighash_type)))
   end
 
-  def endorsement(k, lock_script, sighash = 1)
+  def endorsement(private_key, lock_script, sighash_type = 0x1)
     inputs.first.unlock_script = lock_script
-    hash = signature_hash sighash
-    sign k, hash, sighash
+    hash = signature_hash sighash_type
+    signature = sign private_key, hash
+    encode_der signature, sighash_type
   end
 end
