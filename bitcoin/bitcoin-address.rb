@@ -20,7 +20,7 @@ puts
 n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 puts "Subgroup order: #{n}"
 h = 1
-puts "Cofactor: #{n}"
+puts "Cofactor: #{h}"
 puts
 
 #

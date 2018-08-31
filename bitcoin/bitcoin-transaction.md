@@ -20,7 +20,7 @@ n1C8nsmi4sc4hMBGgVZrnhxeFtk1sTbMZ4
 ### Previous transaction to be spent
 
 ```shell
-shell> fetch-tx d30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93
+shell> bx fetch-tx d30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93
 transaction
 {
     hash d30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93

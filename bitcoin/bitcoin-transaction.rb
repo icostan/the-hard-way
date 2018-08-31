@@ -15,5 +15,6 @@ puts "TX bin: #{transaction.serialize}"
 puts "TX hash: #{transaction.hash}"
 
 k = 0x79020296790075fc8e36835e045c513df8b20d3b3b9dbff4d043be84ae488f8d
+puts
 puts "PK: #{k}"
-# puts "TX sign: #{transaction.signature k}"
+puts "TX sign: #{sign k, transaction.signature_hash, 1}"
