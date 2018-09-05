@@ -1,5 +1,6 @@
 require 'digest'
 require 'securerandom'
+require 'bitcoin'
 
 EC_Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
 EC_Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
@@ -190,10 +191,40 @@ Transaction = Struct.new :version, :inputs, :outputs, :locktime do
     sha256(sha256(serialize + int_to_hex(sighash_type)))
   end
 
-  def endorsement(private_key, lock_script, sighash_type = 0x1)
+  def endorsement_hash(lock_script, sighash_type = 0x1)
     inputs.first.unlock_script = lock_script
-    hash = signature_hash sighash_type
-    signature = sign private_key, hash
-    encode_der signature, sighash_type
+    signature_hash sighash_type
+  end
+
+  def endorsement(private_key, public_key, lock_script, sighash_type = 0x1)
+    hash = endorsement_hash lock_script
+    # signature = openssl_sign private_key, public_key, hash
+    signature = bitcoin_sign private_key, public_key, hash
+    # encode_der signature, sighash_type
+  end
+
+  def openssl_sign(private_key, public_key, hash)
+    key = ::OpenSSL::PKey::EC.new('secp256k1')
+    key.private_key = private_key.to_bn
+    key.public_key = ::OpenSSL::PKey::EC::Point.new key.group, public_key.to_bn
+    raise "Invalid keypair" unless key.check_key
+    signature_binary = key.dsa_sign_asn1([hash].pack('H*'))
+    signature = signature_binary.unpack('H*').first
+    # puts "S: #{signature}"
+    Der.new *[signature].pack('H*').unpack('CCCCH66CCH64C')
+  end
+
+  def bitcoin_sign(private_key, public_key, hash)
+    key = Bitcoin.open_key private_key, public_key
+    raise "Invalid keypair" unless key.check_key
+    signature_binary = Bitcoin.sign_data key, hash
+    signature = signature_binary.unpack('H*').first
+    # puts "S: #{signature}"
+    Der.new *[signature].pack('H*').unpack('CCCCH66CCH64C')
+  end
+end
+
+Der = Struct.new :der, :length, :ri, :rl, :r, :si, :sl, :s, :sighash_type do
+  def serialize
   end
 end
