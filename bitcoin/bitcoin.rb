@@ -203,28 +203,51 @@ Transaction = Struct.new :version, :inputs, :outputs, :locktime do
     # encode_der signature, sighash_type
   end
 
+  def endorse(private_key, public_key, lock_script, sighash_type = 0x01)
+    hash = endorsement_hash lock_script
+    hash_bytes = [hash].pack('H*')
+    r, s = sign private_key, hash_bytes
+    der = Der.new r: r, s: s
+    inputs.first.unlock_script = "#{der.serialize} #{public_key}"
+    serialize
+  end
+
   def openssl_sign(private_key, public_key, hash)
     key = ::OpenSSL::PKey::EC.new('secp256k1')
     key.private_key = private_key.to_bn
     key.public_key = ::OpenSSL::PKey::EC::Point.new key.group, public_key.to_bn
-    raise "Invalid keypair" unless key.check_key
+    raise 'Invalid keypair' unless key.check_key
     signature_binary = key.dsa_sign_asn1([hash].pack('H*'))
     signature = signature_binary.unpack('H*').first
     # puts "S: #{signature}"
-    Der.new *[signature].pack('H*').unpack('CCCCH66CCH64C')
+    Der.parse signature
   end
 
   def bitcoin_sign(private_key, public_key, hash)
     key = Bitcoin.open_key private_key, public_key
-    raise "Invalid keypair" unless key.check_key
+    raise 'Invalid keypair' unless key.check_key
     signature_binary = Bitcoin.sign_data key, hash
     signature = signature_binary.unpack('H*').first
     # puts "S: #{signature}"
-    Der.new *[signature].pack('H*').unpack('CCCCH66CCH64C')
+    Der.parse signature
   end
 end
 
 Der = Struct.new :der, :length, :ri, :rl, :r, :si, :sl, :s, :sighash_type do
+  def initialize(der: 0x30, length: 0x45, ri: 0x02, rl: 0x21, r: nil, si: 0x02, sl: 0x20, s: nil, sighash_type: 0x01)
+    super der, length, ri, rl, r, si, sl, s, sighash_type
+  end
+
   def serialize
+    byte_to_hex(der) + byte_to_hex(length) +
+      # TODO: normalize r to 66 bytes
+      byte_to_hex(ri) + byte_to_hex(rl) + '00' + to_hex(int2bytes(r)) +
+      byte_to_hex(si) + byte_to_hex(sl) + to_hex(int2bytes(s)) +
+      byte_to_hex(sighash_type)
+  end
+
+  def self.parse(signature)
+    fields = *[signature].pack('H*').unpack('CCCCH66CCH64C')
+    Der.new r: fields[4], s: fields[7]
   end
 end
