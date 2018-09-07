@@ -54,7 +54,7 @@ def ec_multiply(m, px, py, pn)
   [qx, qy]
 end
 
-def base58(binary_hash)
+def bitcoin_base58(binary_hash)
   alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
   value = binary_hash.unpack('H*')[0].to_i 16
   output = ''
@@ -67,34 +67,25 @@ def base58(binary_hash)
   output.reverse
 end
 
-def encode_der(signature, sighash_type)
-  r, s = signature
-  r_hex = r.to_s(16).rjust 66, '0'
-  s_hex = s.to_s(16).rjust 64, '0'
-  sighash_type_hex = sighash_type.to_s(16).rjust 2, '0'
-  "30450221#{r_hex}0220#{s_hex}#{sighash_type_hex}"
-end
-
 #
 # ECDSA
 #
-def sign(private_key, digest, temp_key = nil)
+def ecdsa_sign(private_key, digest, temp_key = nil)
   temp_key ||= 1 + SecureRandom.random_number(EC_n - 1)
   rx, _ry = ec_multiply(temp_key, EC_Gx, EC_Gy, EC_p)
   r = rx % EC_n
   r > 0 || raise('r is zero, try again new temp key')
   i_tk = inverse temp_key, EC_n
-  m = bytes2int digest
-  # puts "M: #{m}"
+  m = bytes_to_bignum digest
   s = (i_tk * (m + r * private_key)) % EC_n
   s > 0 || raise('s is zero, try again new temp key')
   [r, s]
 end
 
-def verify?(px, py, digest, signature)
+def ecdsa_verify?(px, py, digest, signature)
   r, s = signature
   i_s = inverse s, EC_n
-  m = bytes2int digest
+  m = bytes_to_bignum digest
   u1 = i_s * m % EC_n
   u2 = i_s * r % EC_n
   u1Gx, u1Gy = ec_multiply u1, EC_Gx, EC_Gy, EC_p
@@ -103,15 +94,16 @@ def verify?(px, py, digest, signature)
   r == rx
 end
 
-def bytes2int(bytes_string)
+def bytes_to_bignum(bytes_string)
   bytes_string.bytes.reduce { |n, b| (n << 8) + b }
 end
-def int2bytes(n)
+def bignum_to_bytes(n, length=nil)
   a = []
   while n > 0
     a << (n & 0xFF)
     n >>= 8
   end
+  a.fill 0x00, a.length, length - a.length if length
   a.reverse.pack('C*')
 end
 
@@ -159,7 +151,6 @@ class Struct
   end
 end
 
-# transaction input
 Input = Struct.new :tx_hash, :index, :unlock_script, :sequence do
   def serialize
     script_hex = script_to_hex(unlock_script)
@@ -167,7 +158,6 @@ Input = Struct.new :tx_hash, :index, :unlock_script, :sequence do
   end
 end
 
-# transaction output
 Output = Struct.new :amount, :lock_script do
   def serialize
     script_hex = script_to_hex(lock_script)
@@ -175,12 +165,12 @@ Output = Struct.new :amount, :lock_script do
   end
 end
 
-# transaction
 Transaction = Struct.new :version, :inputs, :outputs, :locktime do
   def serialize
     inputs_hex = inputs.map(&:serialize).join
     outputs_hex = outputs.map(&:serialize).join
-    int_to_hex(version) + byte_to_hex(inputs.size) + inputs_hex + byte_to_hex(outputs.size) + outputs_hex + int_to_hex(locktime)
+    int_to_hex(version) + byte_to_hex(inputs.size) + inputs_hex +
+      byte_to_hex(outputs.size) + outputs_hex + int_to_hex(locktime)
   end
 
   def hash
@@ -196,41 +186,39 @@ Transaction = Struct.new :version, :inputs, :outputs, :locktime do
     signature_hash sighash_type
   end
 
-  def endorsement(private_key, public_key, lock_script, sighash_type = 0x1)
-    hash = endorsement_hash lock_script
-    # signature = openssl_sign private_key, public_key, hash
-    signature = bitcoin_sign private_key, public_key, hash
-    # encode_der signature, sighash_type
-  end
-
-  def endorse(private_key, public_key, lock_script, sighash_type = 0x01)
+  def sign(private_key, public_key, lock_script, sighash_type = 0x01)
     hash = endorsement_hash lock_script
     hash_bytes = [hash].pack('H*')
-    r, s = sign private_key, hash_bytes
+    r, s = ecdsa_sign private_key, hash_bytes
     der = Der.new r: r, s: s
     inputs.first.unlock_script = "#{der.serialize} #{public_key}"
     serialize
   end
 
-  def openssl_sign(private_key, public_key, hash)
-    key = ::OpenSSL::PKey::EC.new('secp256k1')
-    key.private_key = private_key.to_bn
-    key.public_key = ::OpenSSL::PKey::EC::Point.new key.group, public_key.to_bn
-    raise 'Invalid keypair' unless key.check_key
-    signature_binary = key.dsa_sign_asn1([hash].pack('H*'))
-    signature = signature_binary.unpack('H*').first
-    # puts "S: #{signature}"
-    Der.parse signature
-  end
+  # def endorsement(private_key, public_key, lock_script, sighash_type = 0x1)
+  #   hash = endorsement_hash lock_script
+  #   signature = openssl_sign private_key, public_key, hash
+  #   signature = bitcoin_sign private_key, public_key, hash
+  #   encode_der signature, sighash_type
+  # end
 
-  def bitcoin_sign(private_key, public_key, hash)
-    key = Bitcoin.open_key private_key, public_key
-    raise 'Invalid keypair' unless key.check_key
-    signature_binary = Bitcoin.sign_data key, hash
-    signature = signature_binary.unpack('H*').first
-    # puts "S: #{signature}"
-    Der.parse signature
-  end
+  # def openssl_sign(private_key, public_key, hash)
+  #   key = ::OpenSSL::PKey::EC.new('secp256k1')
+  #   key.private_key = private_key.to_bn
+  #   key.public_key = ::OpenSSL::PKey::EC::Point.new key.group, public_key.to_bn
+  #   raise 'Invalid keypair' unless key.check_key
+  #   signature_binary = key.dsa_sign_asn1([hash].pack('H*'))
+  #   signature = signature_binary.unpack('H*').first
+  #   Der.parse signature
+  # end
+
+  # def bitcoin_sign(private_key, public_key, hash)
+  #   key = Bitcoin.open_key private_key, public_key
+  #   raise 'Invalid keypair' unless key.check_key
+  #   signature_binary = Bitcoin.sign_data key, hash
+  #   signature = signature_binary.unpack('H*').first
+  #   Der.parse signature
+  # end
 end
 
 Der = Struct.new :der, :length, :ri, :rl, :r, :si, :sl, :s, :sighash_type do
@@ -240,14 +228,13 @@ Der = Struct.new :der, :length, :ri, :rl, :r, :si, :sl, :s, :sighash_type do
 
   def serialize
     byte_to_hex(der) + byte_to_hex(length) +
-      # TODO: normalize r to 66 bytes
-      byte_to_hex(ri) + byte_to_hex(rl) + '00' + to_hex(int2bytes(r)) +
-      byte_to_hex(si) + byte_to_hex(sl) + to_hex(int2bytes(s)) +
+      byte_to_hex(ri) + byte_to_hex(rl) + to_hex(bignum_to_bytes(r, 33)) +
+      byte_to_hex(si) + byte_to_hex(sl) + to_hex(bignum_to_bytes(s, 32)) +
       byte_to_hex(sighash_type)
   end
 
   def self.parse(signature)
     fields = *[signature].pack('H*').unpack('CCCCH66CCH64C')
-    Der.new r: fields[4], s: fields[7]
+    Der.new r: fields[4], s: fields[7], sighash_type: fields[8]
   end
 end

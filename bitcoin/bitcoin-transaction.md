@@ -135,6 +135,177 @@ transfers
 
 ## The hard way
 
+Secp256k1 elliptic curve parameters that we all know and love.
+
+```ruby
+EC_Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+EC_Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+EC_p = 2**256 - 2**32 - 2**9 - 2**8 - 2**7 - 2**6 - 2**4 - 1
+EC_n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+```
+
+Basic structs for transaction, input, output and DER signature.
+
+```ruby
+class Struct
+  OPCODES = {
+    'OP_DUP' =>  0x76,
+    'OP_HASH160' =>  0xA9,
+    'OP_EQUAL' =>  0x87,
+    'OP_EQUALVERIFY' =>  0x88,
+    'OP_CHECKSIG' =>  0xAC
+  }.freeze
+  def opcode(token)
+    raise "opcode #{token} not found" unless OPCODES.include?(token)
+    OPCODES[token].to_s 16
+  end
+  def data(token)
+    bin_size = hex_size token
+    byte_to_hex(bin_size) + token
+  end
+
+  def hex_size(hex)
+    [hex].pack('H*').size
+  end
+  def to_hex(binary_bytes)
+    binary_bytes.unpack('H*').first
+  end
+  def hash_to_hex(value)
+    to_hex [value].pack('H*').reverse
+  end
+  def int_to_hex(value)
+    to_hex [value].pack('V')
+  end
+  def byte_to_hex(value)
+    to_hex [value].pack('C')
+  end
+  def long_to_hex(value)
+    to_hex [value].pack('Q<')
+  end
+  def script_to_hex(script_string)
+    script_string.split.map { |token| token.start_with?('OP') ? opcode(token) : data(token) }.join
+  end
+  def sha256(hex)
+    Digest::SHA256.hexdigest([hex].pack('H*'))
+  end
+end
+
+Input = Struct.new :tx_hash, :index, :unlock_script, :sequence do
+  def serialize
+    script_hex = script_to_hex(unlock_script)
+    hash_to_hex(tx_hash) + int_to_hex(index) + byte_to_hex(hex_size(script_hex)) + script_hex + int_to_hex(sequence)
+  end
+end
+
+Output = Struct.new :amount, :lock_script do
+  def serialize
+    script_hex = script_to_hex(lock_script)
+    long_to_hex(amount) + byte_to_hex(hex_size(script_hex)) + script_hex
+  end
+end
+
+Transaction = Struct.new :version, :inputs, :outputs, :locktime do
+  def serialize
+    inputs_hex = inputs.map(&:serialize).join
+    outputs_hex = outputs.map(&:serialize).join
+    int_to_hex(version) +
+      byte_to_hex(inputs.size) + inputs_hex +
+      byte_to_hex(outputs.size) + outputs_hex +
+      int_to_hex(locktime)
+  end
+
+  def hash
+    hash_to_hex sha256(sha256(serialize))
+  end
+
+  def signature_hash(sighash_type = 0x1)
+    sha256(sha256(serialize + int_to_hex(sighash_type)))
+  end
+
+  def endorsement_hash(lock_script, sighash_type = 0x1)
+    inputs.first.unlock_script = lock_script
+    signature_hash sighash_type
+  end
+
+  def sign(private_key, public_key, lock_script, sighash_type = 0x01)
+    hash = endorsement_hash lock_script
+    hash_bytes = [hash].pack('H*')
+    r, s = ecdsa_sign private_key, hash_bytes
+    der = Der.new r: r, s: s
+    inputs.first.unlock_script = "#{der.serialize} #{public_key}"
+    serialize
+  end
+end
+
+Der = Struct.new :der, :length, :ri, :rl, :r, :si, :sl, :s, :sighash_type do
+  def initialize(der: 0x30, length: 0x45, ri: 0x02, rl: 0x21, r: nil, si: 0x02, sl: 0x20, s: nil, sighash_type: 0x01)
+    super der, length, ri, rl, r, si, sl, s, sighash_type
+  end
+
+  def serialize
+    r_hex = to_hex(int2bytes(r)).rjust 66, '0'
+    s_hex = to_hex(int2bytes(s)).rjust 64, '0'
+
+    byte_to_hex(der) + byte_to_hex(length) +
+      byte_to_hex(ri) + byte_to_hex(rl) + r_hex +
+      byte_to_hex(si) + byte_to_hex(sl) + s_hex +
+      byte_to_hex(sighash_type)
+  end
+
+  def self.parse(signature)
+    fields = *[signature].pack('H*').unpack('CCCCH66CCH64C')
+    Der.new r: fields[4], s: fields[7], sighash_type: fields[8]
+  end
+```
+
+ECDSA sign/verify logic
+
+```ruby
+def ecdsa_sign(private_key, digest, temp_key = nil)
+  temp_key ||= 1 + SecureRandom.random_number(EC_n - 1)
+  rx, _ry = ec_multiply(temp_key, EC_Gx, EC_Gy, EC_p)
+  r = rx % EC_n
+  r > 0 || raise('r is zero, try again new temp key')
+  i_tk = inverse temp_key, EC_n
+  m = bytes2int digest
+  s = (i_tk * (m + r * private_key)) % EC_n
+  s > 0 || raise('s is zero, try again new temp key')
+  [r, s]
+end
+
+def ecdsa_verify?(px, py, digest, signature)
+  r, s = signature
+  i_s = inverse s, EC_n
+  m = bytes2int digest
+  u1 = i_s * m % EC_n
+  u2 = i_s * r % EC_n
+  u1Gx, u1Gy = ec_multiply u1, EC_Gx, EC_Gy, EC_p
+  u2Px, u2Py = ec_multiply u2, px, py, EC_p
+  rx, _ry = ec_add u1Gx, u1Gy, u2Px, u2Py, EC_p
+  r == rx
+end
+
+def bytes2int(bytes_string)
+  bytes_string.bytes.reduce { |n, b| (n << 8) + b }
+end
+def int2bytes(n)
+  a = []
+  while n > 0
+    a << (n & 0xFF)
+    n >>= 8
+  end
+  a.reverse.pack('C*')
+end
+```
+
+```ruby
+ruby> input = Input.new '2b8b8c0577d631a2988a228e919efb8f5a60fbce5271794dddd5cfcb18890fb4', 0, '', 0xfffffffff
+ruby> output = Output.new 10_000_000, 'OP_HASH160 f81498040e79014455a5e8f7bd39bce5428121d3 OP_EQUAL'
+ruby> transaction = Transaction.new 1, [input], [output], 0
+ruby> transaction.sign private_key, public_key, lock_script
+0100000001b40f8918cbcfd5dd4d797152cefb605a8ffb9e918e228a98a231d677058c8b2b000000006b483045022100d955e6028004f02a05c1f606dd71b505eaf50bb405e3ddbfa30b60a05951d2f202204ffadf94dc93cdc98f842d21eac953b10debaf4bcec135fb0adbcef91fc67e9a012103996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1ffffffff01809698000000000017a914f81498040e79014455a5e8f7bd39bce5428121d38700000000
+```
+
 ## Conclusions
 
 ## References
