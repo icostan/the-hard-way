@@ -110,7 +110,7 @@ RSpec.describe 'bitcoin' do
         input = Input.new 'd30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93', 1, '', 0xffffffff
         output = Output.new 64000000, 'OP_HASH160 f81498040e79014455a5e8f7bd39bce5428121d3 OP_EQUAL'
         t = Transaction.new 1, [input], [output], 0
-        hash = t.endorsement_hash lock_script
+        hash = t.signature_hash lock_script
         hash_bytes = [hash].pack('H*')
         r, s = ecdsa_sign private_key, hash_bytes
         valid = ecdsa_verify? px, py, hash_bytes, [r, s]
@@ -137,6 +137,21 @@ RSpec.describe 'bitcoin' do
         expect(bytes_string.bytes.size).to eq 32
         expect(bytes_string).to end_with @x_bytes
       end
+    end
+  end
+
+  describe 'bitcoin' do
+    it 'bitcoin_base58_encode' do
+      result = bitcoin_base58_encode '00f54a5851e9372b87810a8e60cdd2e7cfd80b6e31c7f18fe8'
+      expect(result).to eq '1PMycacnJaSqwwJqjawXBErnLsZ7RkXUAs'
+    end
+    it 'bitcoin_base58_decode' do
+      result = bitcoin_base58_decode '1PMycacnJaSqwwJqjawXBErnLsZ7RkXUAs'
+      expect(result).to eq '00f54a5851e9372b87810a8e60cdd2e7cfd80b6e31c7f18fe8'
+    end
+    it 'bitcoin_address_decode' do
+      result = bitcoin_address_decode '2NFrxEjw5v2i7L8pm9dWjWSFpDRXmj8dBTn'
+      expect(result).to eq 'f81498040e79014455a5e8f7bd39bce5428121d3'
     end
   end
 end

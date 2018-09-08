@@ -54,17 +54,38 @@ def ec_multiply(m, px, py, pn)
   [qx, qy]
 end
 
-def bitcoin_base58(binary_hash)
+#
+# Bitcoin
+#
+def bitcoin_base58_encode(ripe160_hash)
   alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-  value = binary_hash.unpack('H*')[0].to_i 16
+  value = ripe160_hash.to_i 16
   output = ''
   while value > 0
     remainder = value % 58
     value /= 58
     output += alphabet[remainder]
   end
-  output += alphabet[0] * binary_hash.bytes.find_index{|b| b != 0}
+  output += alphabet[0] * [ripe160_hash].pack('H*').bytes.find_index{|b| b != 0}
   output.reverse
+end
+def bitcoin_base58_decode(address)
+  alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+  int_val = 0
+  address.reverse.chars.each_with_index do |char, index|
+    char_index = alphabet.index(char)
+    int_val += char_index * 58**index
+  end
+  # TODO: hard coded 50?
+  bignum_to_bytes(int_val, 25).unpack('H*').first
+end
+def bitcoin_address_decode(address)
+  wrap_encode = bitcoin_base58_decode address
+  wrap_encode[2, 40]
+end
+def bitcoin_p2pkh_script(address)
+  ripe160 = bitcoin_address_decode address
+  "OP_DUP OP_HASH160 #{ripe160} OP_EQUALVERIFY OP_CHECKSIG"
 end
 
 #
@@ -154,7 +175,8 @@ end
 Input = Struct.new :tx_hash, :index, :unlock_script, :sequence do
   def serialize
     script_hex = script_to_hex(unlock_script)
-    hash_to_hex(tx_hash) + int_to_hex(index) + byte_to_hex(hex_size(script_hex)) + script_hex + int_to_hex(sequence)
+    hash_to_hex(tx_hash) + int_to_hex(index) +
+      byte_to_hex(hex_size(script_hex)) + script_hex + int_to_hex(sequence)
   end
 end
 
@@ -177,17 +199,13 @@ Transaction = Struct.new :version, :inputs, :outputs, :locktime do
     hash_to_hex sha256(sha256(serialize))
   end
 
-  def signature_hash(sighash_type = 0x1)
+  def signature_hash(lock_script = nil, sighash_type = 0x1)
+    inputs.first.unlock_script = lock_script if lock_script
     sha256(sha256(serialize + int_to_hex(sighash_type)))
   end
 
-  def endorsement_hash(lock_script, sighash_type = 0x1)
-    inputs.first.unlock_script = lock_script
-    signature_hash sighash_type
-  end
-
   def sign(private_key, public_key, lock_script, sighash_type = 0x01)
-    hash = endorsement_hash lock_script
+    hash = signature_hash lock_script, sighash_type
     hash_bytes = [hash].pack('H*')
     r, s = ecdsa_sign private_key, hash_bytes
     der = Der.new r: r, s: s
