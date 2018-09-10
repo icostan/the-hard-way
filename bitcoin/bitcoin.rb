@@ -172,7 +172,10 @@ class Struct
   end
 end
 
-Input = Struct.new :tx_hash, :index, :unlock_script, :sequence do
+Input = Struct.new :value, :tx_hash, :index, :unlock_script, :sequence do
+  def initialize(value, tx_hash, index, unlock_script: '', sequence: 0xfffffffff)
+    super value, tx_hash, index, unlock_script, sequence
+  end
   def serialize
     script_hex = script_to_hex(unlock_script)
     hash_to_hex(tx_hash) + int_to_hex(index) +
@@ -180,10 +183,10 @@ Input = Struct.new :tx_hash, :index, :unlock_script, :sequence do
   end
 end
 
-Output = Struct.new :amount, :lock_script do
+Output = Struct.new :value, :lock_script do
   def serialize
     script_hex = script_to_hex(lock_script)
-    long_to_hex(amount) + byte_to_hex(hex_size(script_hex)) + script_hex
+    long_to_hex(value) + byte_to_hex(hex_size(script_hex)) + script_hex
   end
 end
 
