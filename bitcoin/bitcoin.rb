@@ -83,9 +83,13 @@ def bitcoin_address_decode(address)
   wrap_encode = bitcoin_base58_decode address
   wrap_encode[2, 40]
 end
-def bitcoin_p2pkh_script(address)
-  ripe160 = bitcoin_address_decode address
-  "OP_DUP OP_HASH160 #{ripe160} OP_EQUALVERIFY OP_CHECKSIG"
+def bitcoin_script(address)
+  hash160 = bitcoin_address_decode address
+  if address.start_with? '2'
+    "OP_HASH160 #{hash160} OP_EQUAL"
+  else
+    "OP_DUP OP_HASH160 #{hash160} OP_EQUALVERIFY OP_CHECKSIG"
+  end
 end
 
 #
@@ -215,31 +219,6 @@ Transaction = Struct.new :version, :inputs, :outputs, :locktime do
     inputs.first.unlock_script = "#{der.serialize} #{public_key}"
     serialize
   end
-
-  # def endorsement(private_key, public_key, lock_script, sighash_type = 0x1)
-  #   hash = endorsement_hash lock_script
-  #   signature = openssl_sign private_key, public_key, hash
-  #   signature = bitcoin_sign private_key, public_key, hash
-  #   encode_der signature, sighash_type
-  # end
-
-  # def openssl_sign(private_key, public_key, hash)
-  #   key = ::OpenSSL::PKey::EC.new('secp256k1')
-  #   key.private_key = private_key.to_bn
-  #   key.public_key = ::OpenSSL::PKey::EC::Point.new key.group, public_key.to_bn
-  #   raise 'Invalid keypair' unless key.check_key
-  #   signature_binary = key.dsa_sign_asn1([hash].pack('H*'))
-  #   signature = signature_binary.unpack('H*').first
-  #   Der.parse signature
-  # end
-
-  # def bitcoin_sign(private_key, public_key, hash)
-  #   key = Bitcoin.open_key private_key, public_key
-  #   raise 'Invalid keypair' unless key.check_key
-  #   signature_binary = Bitcoin.sign_data key, hash
-  #   signature = signature_binary.unpack('H*').first
-  #   Der.parse signature
-  # end
 end
 
 Der = Struct.new :der, :length, :ri, :rl, :r, :si, :sl, :s, :sighash_type do
