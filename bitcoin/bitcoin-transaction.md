@@ -1,8 +1,12 @@
-# The hard way - Bitcoin: Spending coins
+# The hard way - Bitcoin: Transaction
 
-## The easy way
+This article is Part 2 of 'The hard way - Bitcoin' series and I will start with 'the easy way' section first because even this gets a bit complex, then will continue with the hard stuff.
+
+## A. The easy way
 
 ### Create private key, public key and address
+
+We are going to generate private key, public key and Bitcoin testnet address to be used everywhere.
 
 ```shell
 shell> bx seed # generate seed
@@ -18,6 +22,8 @@ shell> echo 03996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1 |
 n1C8nsmi4sc4hMBGgVZrnhxeFtk1sTbMZ4
 ```
 ### Previous transaction to be spent
+
+In Bitcoin we have this concept called UTXO (Unspent Transaction Output) which is the output of a previous transaction sent to our Bitcoin address.
 
 ```shell
 shell> bx fetch-tx d30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93
@@ -60,7 +66,7 @@ transaction
 
 ### Create transaction
 
-Create transaction with input from previous transaction hash and index and out put as receiving address and amount in Satoshi.
+Create transaction with input from previous transaction hash and output index. As output we have Bitcoin address receiving address and amount to send in Satoshi.
 
 ```shell
 shell> bx tx-encode -i d30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93:1 -o 2NFrxEjw5v2i7L8pm9dWjWSFpDRXmj8dBTn:64000000
@@ -133,11 +139,11 @@ transfers
 }
 ```
 
-## The hard way
+## B. The hard way
 
-Before starting lets introduce a few utility methods that we are going to use along the way.
+Now lets get down to real business and craft our own transaction starting with a few utility methods that we are going to use along the way.
 
-Two methods to convert big numbers to bytes string and vice-versa, padding with `0x00` to satisfy the length.
+Two methods to convert big numbers to bytes string and vice-versa, padding with `0x00` to satisfy the required length if any.
 
 ```ruby
 def bytes_to_bignum(bytes_string)
@@ -154,7 +160,7 @@ def bignum_to_bytes(n, length=nil)
 end
 ```
 
-Base58 encoding / decoding methods, decode address into Hash160(hashing twice with sha256 then ripe160) and build Bitcoin script based on destination address.
+Base58 encoding / decoding methods, Bitcoin address decoding to Hash160 (hashing twice with sha256 then ripe160) and build Bitcoin script based on destination address that can be Pay-to-PublicKey-Hash or Pay-to-Script-hash.
 
 ```ruby
 def bitcoin_base58_encode(ripe160_hash)
@@ -192,7 +198,7 @@ def bitcoin_script(address)
 end
 ```
 
-Multiple utility methods to transform different data types into hex.
+Multiple utility methods to transform different data types into hex string.
 
 ```ruby
 class Struct
@@ -211,7 +217,6 @@ class Struct
     bin_size = hex_size token
     byte_to_hex(bin_size) + token
   end
-
   def hex_size(hex)
     [hex].pack('H*').size
   end
@@ -242,7 +247,7 @@ end
 Now, lets check the previous transaction that we want to spend.
 
 ```shell
-bx fetch-transaction ea8a64e122304637e8da016836e9afd59fc1179dfa15affc40d63b34e7db0cec
+shell> bx fetch-transaction ea8a64e122304637e8da016836e9afd59fc1179dfa15affc40d63b34e7db0cec
 
 transaction
 {
@@ -281,7 +286,7 @@ transaction
 }
 ```
 
-Build transaction input from previous transaction: value, tx hash and output index.
+Build transaction input from previous UTXO (Unspent Transaction Output): value, tx hash and output index.
 
 ```ruby
 Input = Struct.new :value, :tx_hash, :index, :unlock_script, :sequence do
@@ -318,39 +323,7 @@ change_script = bitcoin_script 'n1C8nsmi4sc4hMBGgVZrnhxeFtk1sTbMZ4'
 change = Output.new change_value, change_script
 ```
 
-Build transaction passing in the input and the two outputs,
-
-```ruby
-Transaction = Struct.new :version, :inputs, :outputs, :locktime do
-  def serialize
-    inputs_hex = inputs.map(&:serialize).join
-    outputs_hex = outputs.map(&:serialize).join
-    int_to_hex(version) + byte_to_hex(inputs.size) + inputs_hex +
-      byte_to_hex(outputs.size) + outputs_hex + int_to_hex(locktime)
-  end
-
-  def hash
-    hash_to_hex sha256(sha256(serialize))
-  end
-
-  def signature_hash(lock_script = nil, sighash_type = 0x1)
-    inputs.first.unlock_script = lock_script if lock_script
-    sha256(sha256(serialize + int_to_hex(sighash_type)))
-  end
-
-  def sign(private_key, public_key, lock_script, sighash_type = 0x01)
-    hash = signature_hash lock_script, sighash_type
-    hash_bytes = [hash].pack('H*')
-    r, s = ecdsa_sign private_key, hash_bytes
-    der = Der.new r: r, s: s
-    inputs.first.unlock_script = "#{der.serialize} #{public_key}"
-    serialize
-  end
-end
-transaction = Transaction.new 1, [input], [output, change], 0
-```
-
-Elliptic curve paramets and methods that we all know and love already.
+Before creating the actual transction lets introduce a few elliptic curve methods methods and parameters that we all know and love already.
 
 ```ruby
 EC_Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
@@ -406,7 +379,7 @@ def ec_multiply(m, px, py, pn)
 end
 ```
 
-ESDSA sign/verify method with DER encoding.
+And these are the core methods of Elliptic Curve Digital Signature Algorithm (ECDSA), the sign/verify methods with DER signature encoding.
 
 ```ruby
 def ecdsa_sign(private_key, digest, temp_key = nil)
@@ -420,7 +393,6 @@ def ecdsa_sign(private_key, digest, temp_key = nil)
   s > 0 || raise('s is zero, try again new temp key')
   [r, s]
 end
-
 def ecdsa_verify?(px, py, digest, signature)
   r, s = signature
   i_s = inverse s, EC_n
@@ -432,20 +404,16 @@ def ecdsa_verify?(px, py, digest, signature)
   rx, _ry = ec_add u1Gx, u1Gy, u2Px, u2Py, EC_p
   r == rx
 end
-
-# DER signature format, sighash type is not part of standard DER
 Der = Struct.new :der, :length, :ri, :rl, :r, :si, :sl, :s, :sighash_type do
   def initialize(der: 0x30, length: 0x45, ri: 0x02, rl: 0x21, r: nil, si: 0x02, sl: 0x20, s: nil, sighash_type: 0x01)
     super der, length, ri, rl, r, si, sl, s, sighash_type
   end
-
   def serialize
     byte_to_hex(der) + byte_to_hex(length) +
       byte_to_hex(ri) + byte_to_hex(rl) + to_hex(bignum_to_bytes(r, 33)) +
       byte_to_hex(si) + byte_to_hex(sl) + to_hex(bignum_to_bytes(s, 32)) +
       byte_to_hex(sighash_type)
   end
-
   def self.parse(signature)
     fields = *[signature].pack('H*').unpack('CCCCH66CCH64C')
     Der.new r: fields[4], s: fields[7], sighash_type: fields[8]
@@ -453,7 +421,36 @@ Der = Struct.new :der, :length, :ri, :rl, :r, :si, :sl, :s, :sighash_type do
 end
 ```
 
-To sign the transaction we need 3 things: private key, public key and previous' transaction lock script.
+We are getting there, build Bitcoin transaction passing in the input and the two outputs.
+
+```ruby
+Transaction = Struct.new :version, :inputs, :outputs, :locktime do
+  def serialize
+    inputs_hex = inputs.map(&:serialize).join
+    outputs_hex = outputs.map(&:serialize).join
+    int_to_hex(version) + byte_to_hex(inputs.size) + inputs_hex +
+      byte_to_hex(outputs.size) + outputs_hex + int_to_hex(locktime)
+  end
+  def hash
+    hash_to_hex sha256(sha256(serialize))
+  end
+  def signature_hash(lock_script = nil, sighash_type = 0x1)
+    inputs.first.unlock_script = lock_script if lock_script
+    hash = sha256(sha256(serialize + int_to_hex(sighash_type)))
+    [hash].pack('H*')
+  end
+  def sign(private_key, public_key, lock_script, sighash_type = 0x01)
+    bytes_string = signature_hash lock_script, sighash_type
+    r, s = ecdsa_sign private_key, bytes_string
+    der = Der.new r: r, s: s
+    inputs.first.unlock_script = "#{der.serialize} #{public_key}"
+    serialize
+  end
+end
+transaction = Transaction.new 1, [input], [output, change], 0
+```
+
+Finally, to sign the transaction we need 3 things: private key, public key and the lock script of previous UTXO to spend.
 
 ```ruby
 private_key = 0x79020296790075fc8e36835e045c513df8b20d3b3b9dbff4d043be84ae488f8d
@@ -465,13 +462,59 @@ puts "TX hash: #{transaction.hash}"
 puts "TX hex: #{tx_hex}"
 ```
 
-And we are done, take the return transaction hex and send it to network, online via[Broasdcast TX](https://testnet.blockchain.info/pushtx) or using bitcoin-cli command line tool.
+And VOILA! take the returned transaction hex and decode/validate it:
 
 ```shell
-bitcoin-cli -testnet sendrawtransaction 0100000001ec0cdbe7343bd640fcaf15fa9d17c19fd5afe9366801dae837463022e1648aea010000006b483045022100c1c85b5865f64f8f18c54f028a50942cd21cbda9c4a5f9296132defe51017c640220304793e361e71b3bae812923ca4aa5481a2fead05a73583ad5d930e7229f562f012103996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1ffffffff0240420f000000000017a914ad99d5964d9180d501c8863f4bcd7b04f076678787a0a55e01000000001976a914d7d35ff2ed9cbc95e689338af8cd1db133be6a4a88ac00000000
+shell> bx tx-decode 0100000001ec0cdbe7343bd640fcaf15fa9d17c19fd5afe9366801dae837463022e1648aea010000006b483045022100c1c85b5865f64f8f18c54f028a50942cd21cbda9c4a5f9296132defe51017c640220304793e361e71b3bae812923ca4aa5481a2fead05a73583ad5d930e7229f562f012103996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1ffffffff0240420f000000000017a914ad99d5964d9180d501c8863f4bcd7b04f076678787a0a55e01000000001976a914d7d35ff2ed9cbc95e689338af8cd1db133be6a4a88ac00000000
+
+transaction
+{
+    hash c218dc394fef23ab9652ed6fd49539aa5dfb4f0153127b5c433032918948e60b
+    inputs
+    {
+        input
+        {
+            address_hash d7d35ff2ed9cbc95e689338af8cd1db133be6a4a
+            previous_output
+            {
+                hash ea8a64e122304637e8da016836e9afd59fc1179dfa15affc40d63b34e7db0cec
+                index 1
+            }
+            script "[3045022100c1c85b5865f64f8f18c54f028a50942cd21cbda9c4a5f9296132defe51017c640220304793e361e71b3bae812923ca4aa5481a2fead05a73583ad5d930e7229f562f01] [03996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1]"
+            sequence 4294967295
+        }
+    }
+    lock_time 0
+    outputs
+    {
+        output
+        {
+            address_hash ad99d5964d9180d501c8863f4bcd7b04f0766787
+            script "hash160 [ad99d5964d9180d501c8863f4bcd7b04f0766787] equal"
+            value 1000000
+        }
+        output
+        {
+            address_hash d7d35ff2ed9cbc95e689338af8cd1db133be6a4a
+            script "dup hash160 [d7d35ff2ed9cbc95e689338af8cd1db133be6a4a] equalverify checksig"
+            value 22980000
+        }
+    }
+    version 1
+}
+
 ```
 
-## Conclusions
+then submit it to Bitcoin testnet network via:
+
+- [Broadcast TX](https://testnet.blockchain.info/pushtx)
+- or using `bitcoin-cli` command line tool
+
+```shell
+shell> bitcoin-cli -testnet sendrawtransaction 0100000001ec0cdbe7343bd640fcaf15fa9d17c19fd5afe9366801dae837463022e1648aea010000006b483045022100c1c85b5865f64f8f18c54f028a50942cd21cbda9c4a5f9296132defe51017c640220304793e361e71b3bae812923ca4aa5481a2fead05a73583ad5d930e7229f562f012103996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1ffffffff0240420f000000000017a914ad99d5964d9180d501c8863f4bcd7b04f076678787a0a55e01000000001976a914d7d35ff2ed9cbc95e689338af8cd1db133be6a4a88ac00000000
+```
+
+## C. Conclusions
 
 ## References
 

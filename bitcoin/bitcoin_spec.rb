@@ -43,7 +43,9 @@ RSpec.describe 'bitcoin' do
       input = Input.new 0, '97e06e49dfdd26c5a904670971ccf4c7fe7d9da53cb379bf9b442fc9427080b3', 0
       input.unlock_script = 'OP_DUP OP_HASH160 88350574280395ad2c3e2ee20e322073d94e5e40 OP_EQUALVERIFY OP_CHECKSIG'
       t = Transaction.new 1, [input], [], 0
-      expect(t.signature_hash).to eq 'f89572635651b2e4f89778350616989183c98d1a721c911324bf9f17a0cf5bf0'
+      bytes_string = t.signature_hash
+      hex = t.to_hex bytes_string
+      expect(hex).to eq 'f89572635651b2e4f89778350616989183c98d1a721c911324bf9f17a0cf5bf0'
     end
 
     xit '#endorsement' do

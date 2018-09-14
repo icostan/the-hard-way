@@ -1,0 +1,10 @@
+* Support multiple cryptos
+  * litecoin
+  * iota
+  * stellar
+  * monero
+  * ethereum
+* Atomic swaps
+* Distributed order book
+  * ipfs
+  * torrents

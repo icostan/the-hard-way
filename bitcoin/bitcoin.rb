@@ -208,13 +208,13 @@ Transaction = Struct.new :version, :inputs, :outputs, :locktime do
 
   def signature_hash(lock_script = nil, sighash_type = 0x1)
     inputs.first.unlock_script = lock_script if lock_script
-    sha256(sha256(serialize + int_to_hex(sighash_type)))
+    hash = sha256(sha256(serialize + int_to_hex(sighash_type)))
+    [hash].pack('H*')
   end
 
   def sign(private_key, public_key, lock_script, sighash_type = 0x01)
-    hash = signature_hash lock_script, sighash_type
-    hash_bytes = [hash].pack('H*')
-    r, s = ecdsa_sign private_key, hash_bytes
+    bytes_string = signature_hash lock_script, sighash_type
+    r, s = ecdsa_sign private_key, bytes_string
     der = Der.new r: r, s: s
     inputs.first.unlock_script = "#{der.serialize} #{public_key}"
     serialize
