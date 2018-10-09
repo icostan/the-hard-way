@@ -117,7 +117,7 @@ puts
 network='00'
 with_version="#{network}#{ripemd160}"
 # puts "WITH VERSION: #{with_version}"
-checksum=Digest::SHA256.hexdigest([Digest::SHA256.hexdigest([with_version].pack('H*'))].pack('H*'))[0, 8]
+checksum=Digest::SHA256.hexdigest(Digest::SHA256.digest([with_version].pack('H*')))[0, 8]
 # puts "CHECKSUM: #{checksum}"
 wrap_encode="#{with_version}#{checksum}"
 puts "WRAP ENCODE: #{wrap_encode}"

@@ -8,7 +8,7 @@
   * public key is the result of scalar multiplication of private key and a point on Elliptic curve
   * Bitcoin address is derived from public key by doing SHA256 / RIPE160 hashing and adding network prefix and checksum suffix
   * we will generate valid Bitcoin address using two hash functions and simple math operations like addition, multiplication
-  * it should be as easy as copy / paste Ruby code snippets below
+  * copy / paste Ruby code snippets below or get the[gist](https://gist.github.com/icostan/231b459f610e025d31e99b0bcbd8f90e)
 
 ### Elliptic Curve domain parameters
 
@@ -152,7 +152,7 @@ ruby> ripemd160 = Digest::RMD160.hexdigest([sha256].pack('H*'))
 
 ### 4. Add version byte
 
-See [Bitcoin address prefixes](https://en.bitcoin.it/wiki/List_of_address_prefixes) for an complete list of all supported address prefixes and resulting Base58 encodings, here are just a few:
+Here are a few but see [Bitcoin address prefixes](https://en.bitcoin.it/wiki/List_of_address_prefixes) for a complete list of all supported prefixes and resulting Base58 encodings:
   * 0x00 - Bitcoin address - result prefix is 1
   * 0x05 - Pay-to-Script-Hash address - result prefix is 3
   * 0x6F - Testnet address - resulting prefix is either m or n
