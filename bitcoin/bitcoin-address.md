@@ -1,6 +1,10 @@
 # The hard way series - Bitcoin: private key, public key, address
 
+The article is all about two ways of generating a Bitcoin address: the hard way using simple math and the easy way using an existing bitcoin library.
+
 ## A. The hard way
+
+In this section I am going to use simple math functions like addition and multiplication to generate a valid Bitcoin address starting from a number, the private key and working calculating everything all the way up to public key and final Bitcoin address.
 
 ### TL;DR;
 

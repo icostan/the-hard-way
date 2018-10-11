@@ -1,5 +1,4 @@
 require 'digest'
-require 'base58'
 
 #
 # secp256k1 domain parameters
