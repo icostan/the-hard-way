@@ -93,7 +93,7 @@ shell> bx input-set "[3045022100b290086350a59ce28dd80cc89eac80eac097c20a50ed8c4f
 
 Validate input with public key, lock script and signed endorsement.
 
-```
+```shell
 shell> bx input-validate 03996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1 "dup hash160 [d7d35ff2ed9cbc95e689338af8cd1db133be6a4a] equalverify checksig" 3045022100b290086350a59ce28dd80cc89eac80eac097c20a50ed8c4f35b1ecbed789b65c02200129f4c34a9b05705d4f5e55acff0ce44b5565ab4a8c7faa4a74cf5e1367451101 010000000193df6c67046aa304d6f08533cbbf87731fea9399d91a76f4080e0676a4e20dd3010000006b483045022100b290086350a59ce28dd80cc89eac80eac097c20a50ed8c4f35b1ecbed789b65c02200129f4c34a9b05705d4f5e55acff0ce44b5565ab4a8c7faa4a74cf5e13674511012103996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1ffffffff010090d0030000000017a914f81498040e79014455a5e8f7bd39bce5428121d38700000000
 The endorsement is valid.
 ```
@@ -516,9 +516,13 @@ shell> bitcoin-cli -testnet sendrawtransaction 0100000001ec0cdbe7343bd640fcaf15f
 
 ## C. Conclusions
 
-## References
+## D. References
+
+Here are the most important references but feel free to contact for more information.
 
   * [OP_CHECKSIG](https://en.bitcoin.it/wiki/OP_CHECKSIG)
   * [Bitcoin Script](https://en.bitcoin.it/wiki/Script)
   * [Address prefixes](https://en.bitcoin.it/wiki/List_of_address_prefixes)
   * [Libbitcoin-explorer](https://github.com/libbitcoin/libbitcoin-explorer/wiki)
+
+The end.
