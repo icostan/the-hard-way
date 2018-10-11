@@ -1,10 +1,10 @@
 # The hard way series - Bitcoin: private key, public key, address
 
-The article is all about two ways of generating a Bitcoin address: the hard way using simple math and the easy way using an existing bitcoin library.
+This article is all about two ways of generating a Bitcoin address: the hard way using simple math and the easy way using an existing Bitcoin library.
 
 ## A. The hard way
 
-In this section I am going to use simple math functions like addition and multiplication to generate a valid Bitcoin address starting from a number, the private key and working calculating everything all the way up to public key and final Bitcoin address.
+In this section I am going to use simple math functions like addition and multiplication to generate a valid Bitcoin address starting from a number, the private key and calculating everything all the way up to public key and final Bitcoin address.
 
 ### TL;DR;
 
@@ -24,6 +24,7 @@ The migthy prime number itself.
 
 ```ruby
 ruby> p = 2**256 - 2**32 - 2**9 - 2**8 - 2**7 - 2**6 - 2**4 - 1
+
  => 115792089237316195423570985008687907853269984665640564039457584007908834671663
 ```
 
@@ -41,8 +42,11 @@ These 3 are all related and together they define a cyclic subgroup of elliptic c
 
 ```ruby
 ruby> G = '0479BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8'
+
  => "0479BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8"
+
 ruby> Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+
  => 55066263022277343669578718895168534326250603453777594175500187360389116729240
 ruby> Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
  => 32670510020758816978083085130507043184471273380659243275938904335757337482424
@@ -222,6 +226,8 @@ shell> echo 18e14a7b6a307f426a94f8114701e7c8e774e7f9a47e2c2035db29a206321725 | b
 And here we are, the exact same Bitcoin address used in [Bitcoin address generation](https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses) tutorial is generated the hard way and the easy way. You can [check the address](https://www.blockchain.com/btc/address/1PMycacnJaSqwwJqjawXBErnLsZ7RkXUAs).
 
 ## References
+
+See the most important references below and feel free to contact me if you need more info on the subject.
 
   * [Bitcoin address generation](https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses)
   * [Elliptic curve point multiplication](https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication)
