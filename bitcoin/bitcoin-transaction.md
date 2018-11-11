@@ -1,12 +1,12 @@
 # The hard way - Bitcoin: Transaction
 
-This article is Part 2 of 'The hard way - Bitcoin' series and I will start with 'the easy way' section first because even this gets a bit complex, then will continue with the hard stuff.
+This is Part 2 of 'The hard way - Bitcoin' series and I will start with 'the easy way' section first because even this gets a bit complex, then will continue with the hard stuff, crafting a Bitcoin transaction from scratch using basic math and cryptography.
 
 ## A. The easy way
 
 ### Create private key, public key and address
 
-We are going to generate private key, public key and Bitcoin testnet address to be used everywhere.
+We are going to generate private key, public key and Bitcoin testnet address to be used in this article.
 
 ```shell
 shell> bx seed # generate seed
@@ -23,7 +23,7 @@ n1C8nsmi4sc4hMBGgVZrnhxeFtk1sTbMZ4
 ```
 ### Previous transaction to be spent
 
-In Bitcoin we have this concept called UTXO (Unspent Transaction Output) which is the output of a previous transaction sent to our Bitcoin address.
+In Bitcoin we have this concept called UTXO (Unspent Transaction Output) which is the unspent output of a previous transaction.
 
 ```shell
 shell> bx fetch-tx d30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93
@@ -66,7 +66,7 @@ transaction
 
 ### Create transaction
 
-Create transaction with input from previous transaction hash and output index. As output we have Bitcoin address receiving address and amount to send in Satoshi.
+Create transaction with two parameters: input (previous transaction hash and previous transaction output index) and output (receiving address and amount to send in Satoshi).
 
 ```shell
 shell> bx tx-encode -i d30de2a476060e08f4761ad99993ea1f7387bfcb3385f0d604a36a04676cdf93:1 -o 2NFrxEjw5v2i7L8pm9dWjWSFpDRXmj8dBTn:64000000
@@ -82,7 +82,7 @@ shell> bx input-sign 79020296790075fc8e36835e045c513df8b20d3b3b9dbff4d043be84ae4
 3045022100b290086350a59ce28dd80cc89eac80eac097c20a50ed8c4f35b1ecbed789b65c02200129f4c34a9b05705d4f5e55acff0ce44b5565ab4a8c7faa4a74cf5e1367451101
 ```
 
-Create unlock script using signed endorsement and public key and assign it to transaction's input.
+Create unlock script using signed endorsement and the public key then set it as transaction's input.
 
 ```shell
 shell> bx input-set "[3045022100b290086350a59ce28dd80cc89eac80eac097c20a50ed8c4f35b1ecbed789b65c02200129f4c34a9b05705d4f5e55acff0ce44b5565ab4a8c7faa4a74cf5e1367451101] [03996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1]" 010000000193df6c67046aa304d6f08533cbbf87731fea9399d91a76f4080e0676a4e20dd30100000000ffffffff010090d0030000000017a914f81498040e79014455a5e8f7bd39bce5428121d38700000000
@@ -107,7 +107,7 @@ The transaction is valid.
 
 ### Broadcast transaction
 
-Broadcast the transaction to blockchain.
+Broadcast the transaction to network.
 
 ```shell
 bx send-tx 010000000193df6c67046aa304d6f08533cbbf87731fea9399d91a76f4080e0676a4e20dd3010000006b483045022100b290086350a59ce28dd80cc89eac80eac097c20a50ed8c4f35b1ecbed789b65c02200129f4c34a9b05705d4f5e55acff0ce44b5565ab4a8c7faa4a74cf5e13674511012103996c918f74f0a6f1aeed99ebd81ab8eed8df99bc96fc082b20839259d332bad1ffffffff010090d0030000000017a914f81498040e79014455a5e8f7bd39bce5428121d38700000000
@@ -516,13 +516,15 @@ shell> bitcoin-cli -testnet sendrawtransaction 0100000001ec0cdbe7343bd640fcaf15f
 
 ## C. Conclusions
 
+Creating transaction is a bit more difficult than generating a Bitcoin address that we saw in Part 1 but it is all possible once you understand the basics of Bitcoin like UTXOs, script and transactions.
+
 ## D. References
 
-Here are the most important references but feel free to contact for more information.
+Here are the most important references but feel free to get in touch for more information.
 
   * [OP_CHECKSIG](https://en.bitcoin.it/wiki/OP_CHECKSIG)
   * [Bitcoin Script](https://en.bitcoin.it/wiki/Script)
   * [Address prefixes](https://en.bitcoin.it/wiki/List_of_address_prefixes)
   * [Libbitcoin-explorer](https://github.com/libbitcoin/libbitcoin-explorer/wiki)
 
-The end.
+The very end.
